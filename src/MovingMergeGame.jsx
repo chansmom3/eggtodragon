@@ -455,7 +455,7 @@ export default function MovingMergeGame() {
         const radius = size / 2 + 3;
 
         // 이동 속도 조절 (시각적으로 보이도록 더 느리게)
-        const speedMultiplier = 0.5; // 속도를 50%로 줄여서 시각적으로 명확히 보이게
+        const speedMultiplier = 0.3; // 속도를 30%로 줄여서 발사 경로가 명확히 보이게
         x += vx * speedMultiplier;
         y += vy * speedMultiplier;
         vy += 0.15 * speedMultiplier; // 중력도 비례해서 줄임
@@ -527,27 +527,52 @@ export default function MovingMergeGame() {
           return checkedBirds;
         });
 
-        // 경계 체크 (발사체의 크기를 고려, 플레이 영역 내로 제한)
+        // 경계 체크 및 벽 충돌 반사 (발사체의 크기를 고려, 플레이 영역 내로 제한)
         const minX = radius;
         const maxX = GAME_WIDTH - radius;
         const minY = radius;
         const maxY = PLAY_AREA_HEIGHT - radius; // 플레이 영역 내로 제한
 
-        // 플레이 영역 밖으로 나가면 새로 추가
-        if (x < minX || x > maxX || y < minY || y > maxY) {
-          // 플레이 영역 내로 위치 제한
-          x = Math.max(minX, Math.min(maxX, x));
-          y = Math.max(minY, Math.min(maxY, y));
-          
+        // 벽 충돌 처리 (튕기기)
+        let bounced = false;
+        if (x < minX) {
+          x = minX;
+          vx = -vx * 0.7; // 반발 계수 0.7
+          bounced = true;
+        } else if (x > maxX) {
+          x = maxX;
+          vx = -vx * 0.7;
+          bounced = true;
+        }
+
+        if (y < minY) {
+          y = minY;
+          vy = -vy * 0.7;
+          bounced = true;
+        } else if (y > maxY) {
+          y = maxY;
+          vy = -vy * 0.7;
+          bounced = true;
+        }
+
+        // 벽에 튕겼을 때 햅틱 피드백
+        if (bounced) {
+          try {
+            if (navigator.vibrate) {
+              navigator.vibrate(20); // 짧은 진동
+            }
+          } catch (e) {}
+        }
+
+        // 속도가 너무 느려지면 새로 추가하고 발사체 제거 (벽에 튕긴 후에도 계속 날아가도록)
+        const speed = Math.sqrt(vx * vx + vy * vy);
+        if (speed < 0.2) {
           setBirds((prevBirds) => {
-            // 발사체를 새로 추가
             const newBird = createBird(level, x, y);
-            // 경계에 닿았으므로 약간의 랜덤 속도 추가
             newBird.vx = (Math.random() - 0.5) * 2;
             newBird.vy = (Math.random() - 0.5) * 2;
             return [...prevBirds, newBird];
           });
-          // 발사체 제거
           return null;
         }
 
@@ -628,8 +653,9 @@ export default function MovingMergeGame() {
 
 
 
-  const calculateTrajectory = (startX, startY, dx, dy, dist, steps = 50) => {
+  const calculateTrajectory = (startX, startY, dx, dy, dist, steps = 80) => {
     const points = [];
+    const radius = 15; // 발사체 반지름 (대략적)
     
     // handleEnd와 동일한 방식으로 속도 계산
     const basePower = Math.min(dist / 8, 12);
@@ -644,15 +670,42 @@ export default function MovingMergeGame() {
     let currentVx = (dx / dist) * horizontalPower;
     let currentVy = (dy / dist) * verticalPower;
     const gravity = 0.15;
+    const speedMultiplier = 0.3; // 실제 발사체 속도와 동일하게
+
+    // 경계 정의
+    const minX = radius;
+    const maxX = GAME_WIDTH - radius;
+    const minY = radius;
+    const maxY = PLAY_AREA_HEIGHT - radius;
 
     for (let i = 0; i < steps; i++) {
       points.push({ x, y });
-      x += currentVx;
-      y += currentVy;
-      currentVy += gravity;
+      
+      // 이동
+      x += currentVx * speedMultiplier;
+      y += currentVy * speedMultiplier;
+      currentVy += gravity * speedMultiplier;
 
-      // 화면 밖으로 나가면 중단
-      if (x < 0 || x > GAME_WIDTH || y < 0 || y > GAME_HEIGHT) {
+      // 벽 충돌 처리 (튕기기)
+      if (x < minX) {
+        x = minX;
+        currentVx = -currentVx * 0.7;
+      } else if (x > maxX) {
+        x = maxX;
+        currentVx = -currentVx * 0.7;
+      }
+
+      if (y < minY) {
+        y = minY;
+        currentVy = -currentVy * 0.7;
+      } else if (y > maxY) {
+        y = maxY;
+        currentVy = -currentVy * 0.7;
+      }
+
+      // 속도가 너무 느려지면 중단
+      const speed = Math.sqrt(currentVx * currentVx + currentVy * currentVy);
+      if (speed < 0.2) {
         break;
       }
     }
@@ -720,21 +773,51 @@ export default function MovingMergeGame() {
                     />
                   );
                 })}
-                {/* 예상 충돌 지점 표시 */}
-                {trajectoryPoints.length > 10 && (
-                  <circle
-                    cx={trajectoryPoints[Math.min(30, trajectoryPoints.length - 1)].x}
-                    cy={trajectoryPoints[Math.min(30, trajectoryPoints.length - 1)].y}
-                    r={8}
-                    fill="none"
-                    stroke="rgba(255, 100, 100, 0.8)"
-                    strokeWidth={2}
-                    strokeDasharray="3,3"
-                  >
-                    <animate attributeName="r" values="6;10;6" dur="1s" repeatCount="indefinite" />
-                    <animate attributeName="opacity" values="0.6;1;0.6" dur="1s" repeatCount="indefinite" />
-                  </circle>
-                )}
+                {/* 예상 충돌 지점 표시 (벽에 튕긴 후 경로도 고려) */}
+                {trajectoryPoints.length > 10 && (() => {
+                  // 궤적의 중간 지점들을 확인하여 타겟 새와의 거리 계산
+                  let bestTarget = null;
+                  let bestDist = Infinity;
+                  let bestPointIdx = -1;
+
+                  birds.forEach(bird => {
+                    if (bird.level === currentLevel) {
+                      trajectoryPoints.forEach((point, idx) => {
+                        if (idx > 5 && idx < trajectoryPoints.length - 5) { // 시작과 끝 부분 제외
+                          const dx = bird.x - point.x;
+                          const dy = bird.y - point.y;
+                          const dist = Math.sqrt(dx * dx + dy * dy);
+                          const hitDist = (bird.size + LEVELS[currentLevel].size) / 2 + 15;
+                          
+                          if (dist < hitDist && dist < bestDist) {
+                            bestDist = dist;
+                            bestTarget = bird;
+                            bestPointIdx = idx;
+                          }
+                        }
+                      });
+                    }
+                  });
+
+                  const targetPoint = bestPointIdx >= 0 
+                    ? trajectoryPoints[bestPointIdx]
+                    : trajectoryPoints[Math.min(30, trajectoryPoints.length - 1)];
+
+                  return (
+                    <circle
+                      cx={targetPoint.x}
+                      cy={targetPoint.y}
+                      r={10}
+                      fill="none"
+                      stroke={bestTarget ? "rgba(255, 215, 0, 0.9)" : "rgba(255, 100, 100, 0.8)"}
+                      strokeWidth={3}
+                      strokeDasharray="3,3"
+                    >
+                      <animate attributeName="r" values="8;12;8" dur="1s" repeatCount="indefinite" />
+                      <animate attributeName="opacity" values="0.7;1;0.7" dur="1s" repeatCount="indefinite" />
+                    </circle>
+                  );
+                })()}
               </>
             )}
 
