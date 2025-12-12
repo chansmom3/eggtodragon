@@ -18,19 +18,19 @@ const PLAY_AREA_HEIGHT = GAME_HEIGHT - AIM_AREA_HEIGHT; // 플레이 케이지 �
 
 const LEVELS = [
 
-  { emoji: '🐣', color: '#FFE066', size: 28, speed: 0.3, name: '병아리' },
+  { emoji: '🐣', color: '#FFE066', size: 24, speed: 0.3, name: '병아리' },
 
-  { emoji: '🐥', color: '#FFD93D', size: 32, speed: 0.5, name: '아기새' },
+  { emoji: '🐥', color: '#FFD93D', size: 30, speed: 0.5, name: '아기새' },
 
-  { emoji: '🐔', color: '#FF8C42', size: 36, speed: 0.8, name: '닭' },
+  { emoji: '🐔', color: '#FF8C42', size: 38, speed: 0.8, name: '닭' },
 
-  { emoji: '🦆', color: '#6BCB77', size: 40, speed: 1.0, name: '오리' },
+  { emoji: '🦆', color: '#6BCB77', size: 48, speed: 1.0, name: '오리' },
 
-  { emoji: '🦢', color: '#FFFFFF', size: 44, speed: 1.2, name: '백조' },
+  { emoji: '🦢', color: '#FFFFFF', size: 58, speed: 1.2, name: '백조' },
 
-  { emoji: '🦅', color: '#8B4513', size: 48, speed: 1.5, name: '독수리' },
+  { emoji: '🦅', color: '#8B4513', size: 70, speed: 1.5, name: '독수리' },
 
-  { emoji: '🐉', color: '#9B59B6', size: 52, speed: 0.5, name: '용' },
+  { emoji: '🐉', color: '#9B59B6', size: 85, speed: 0.5, name: '용' },
 
 ];
 
@@ -369,11 +369,36 @@ export default function MovingMergeGame() {
               const mergedBird = createBird(newLevel, mergeX, mergeY);
               mergedBird.vx = (bird.vx + otherBird.vx) / 2;
               mergedBird.vy = (bird.vy + otherBird.vy) / 2;
-              mergedBirds.push(mergedBird);
+              
+              // 용(마지막 단계)인 경우 특별 처리
+              if (newLevel === LEVELS.length - 1) {
+                // 용 생성 보너스 점수
+                setScore((s) => s + 2000);
+                setMergeEffect({ x: mergeX, y: mergeY, level: newLevel, isDragon: true });
+                
+                // 용도 일단 추가하고, 3초 후 자동 소멸
+                mergedBirds.push(mergedBird);
+                
+                // 용은 3초 후 자동 소멸
+                setTimeout(() => {
+                  setBirds((prevBirds) => {
+                    const filtered = prevBirds.filter(b => b.id !== mergedBird.id);
+                    // 소멸 시 추가 점수
+                    setScore((s) => s + 1000);
+                    setMergeEffect({ x: mergeX, y: mergeY, level: newLevel, isDragon: true, isDestroying: true });
+                    setTimeout(() => setMergeEffect(null), 500);
+                    return filtered;
+                  });
+                }, 3000);
+              } else {
+                mergedBirds.push(mergedBird);
+              }
 
               // 병합 이펙트
-              setMergeEffect({ x: mergeX, y: mergeY, level: newLevel });
-              setTimeout(() => setMergeEffect(null), 500);
+              if (newLevel < LEVELS.length - 1) {
+                setMergeEffect({ x: mergeX, y: mergeY, level: newLevel });
+                setTimeout(() => setMergeEffect(null), 500);
+              }
 
               // 점수 추가
               const points = (newLevel + 1) * 100;
@@ -455,7 +480,7 @@ export default function MovingMergeGame() {
         const radius = size / 2 + 3;
 
         // 이동 속도 조절 (시각적으로 보이도록 더 느리게)
-        const speedMultiplier = 0.3; // 속도를 30%로 줄여서 발사 경로가 명확히 보이게
+        const speedMultiplier = 0.15; // 속도를 15%로 줄여서 발사 경로가 매우 명확히 보이게
         x += vx * speedMultiplier;
         y += vy * speedMultiplier;
         vy += 0.15 * speedMultiplier; // 중력도 비례해서 줄임
@@ -508,7 +533,24 @@ export default function MovingMergeGame() {
                 if (newLevel < LEVELS.length - 1) {
                   updatedBirds.push(createBird(newLevel, hitBird.x, hitBird.y));
                 } else {
-                  setScore((s) => s + 1000);
+                  // 용(마지막 단계) 생성
+                  const dragon = createBird(newLevel, hitBird.x, hitBird.y);
+                  // 용 생성 보너스 점수
+                  setScore((s) => s + 2000);
+                  
+                  // 용은 3초 후 자동 소멸
+                  setTimeout(() => {
+                    setBirds((prevBirds) => {
+                      const filtered = prevBirds.filter(b => b.id !== dragon.id);
+                      // 소멸 시 추가 점수
+                      setScore((s) => s + 1000);
+                      setMergeEffect({ x: hitBird.x, y: hitBird.y, level: newLevel, isDragon: true, isDestroying: true });
+                      setTimeout(() => setMergeEffect(null), 500);
+                      return filtered;
+                    });
+                  }, 3000);
+                  
+                  updatedBirds.push(dragon);
                 }
 
                 if (updatedBirds.length < 12) {
@@ -655,6 +697,7 @@ export default function MovingMergeGame() {
 
   const calculateTrajectory = (startX, startY, dx, dy, dist, steps = 80) => {
     const points = [];
+    const bouncePoints = []; // 벽 충돌 지점 저장
     const radius = 15; // 발사체 반지름 (대략적)
     
     // handleEnd와 동일한 방식으로 속도 계산
@@ -670,7 +713,7 @@ export default function MovingMergeGame() {
     let currentVx = (dx / dist) * horizontalPower;
     let currentVy = (dy / dist) * verticalPower;
     const gravity = 0.15;
-    const speedMultiplier = 0.3; // 실제 발사체 속도와 동일하게
+    const speedMultiplier = 0.15; // 실제 발사체 속도와 동일하게
 
     // 경계 정의
     const minX = radius;
@@ -678,8 +721,15 @@ export default function MovingMergeGame() {
     const minY = radius;
     const maxY = PLAY_AREA_HEIGHT - radius;
 
+    let prevX = x;
+    let prevY = y;
+    let bounced = false;
+
     for (let i = 0; i < steps; i++) {
       points.push({ x, y });
+      
+      prevX = x;
+      prevY = y;
       
       // 이동
       x += currentVx * speedMultiplier;
@@ -687,20 +737,41 @@ export default function MovingMergeGame() {
       currentVy += gravity * speedMultiplier;
 
       // 벽 충돌 처리 (튕기기)
+      bounced = false;
       if (x < minX) {
         x = minX;
+        // 반사 후 각도 계산 (수직 벽에 반사)
         currentVx = -currentVx * 0.7;
+        currentVy = currentVy * 0.7;
+        const reflectAngle = Math.atan2(currentVy, currentVx);
+        bounced = true;
+        bouncePoints.push({ x, y, angle: reflectAngle, type: 'left' });
       } else if (x > maxX) {
         x = maxX;
+        // 반사 후 각도 계산 (수직 벽에 반사)
         currentVx = -currentVx * 0.7;
+        currentVy = currentVy * 0.7;
+        const reflectAngle = Math.atan2(currentVy, currentVx);
+        bounced = true;
+        bouncePoints.push({ x, y, angle: reflectAngle, type: 'right' });
       }
 
       if (y < minY) {
         y = minY;
+        // 반사 후 각도 계산 (수평 벽에 반사)
+        currentVx = currentVx * 0.7;
         currentVy = -currentVy * 0.7;
+        const reflectAngle = Math.atan2(currentVy, currentVx);
+        bounced = true;
+        bouncePoints.push({ x, y, angle: reflectAngle, type: 'top' });
       } else if (y > maxY) {
         y = maxY;
+        // 반사 후 각도 계산 (수평 벽에 반사)
+        currentVx = currentVx * 0.7;
         currentVy = -currentVy * 0.7;
+        const reflectAngle = Math.atan2(currentVy, currentVx);
+        bounced = true;
+        bouncePoints.push({ x, y, angle: reflectAngle, type: 'bottom' });
       }
 
       // 속도가 너무 느려지면 중단
@@ -710,7 +781,7 @@ export default function MovingMergeGame() {
       }
     }
 
-    return points;
+    return { points, bouncePoints };
   };
 
   const renderSlingshot = () => {
@@ -721,11 +792,14 @@ export default function MovingMergeGame() {
 
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    let trajectoryPoints = [];
+    let trajectoryData = null;
 
     if (isDragging && dist > 5) {
-      trajectoryPoints = calculateTrajectory(SLING_X, SLING_Y - 20, dx, dy, dist, 80);
+      trajectoryData = calculateTrajectory(SLING_X, SLING_Y - 20, dx, dy, dist, 80);
     }
+    
+    const trajectoryPoints = trajectoryData?.points || [];
+    const bouncePoints = trajectoryData?.bouncePoints || [];
 
     return (
 
@@ -750,14 +824,137 @@ export default function MovingMergeGame() {
             {/* 예상 궤적 라인 */}
             {trajectoryPoints.length > 1 && (
               <>
-                <polyline
-                  points={trajectoryPoints.map(p => `${p.x},${p.y}`).join(' ')}
-                  fill="none"
-                  stroke="rgba(255, 200, 50, 0.8)"
-                  strokeWidth={2.5}
-                  strokeDasharray="4,4"
-                  strokeLinecap="round"
-                />
+                {/* 벽 충돌 지점을 기준으로 세그먼트로 나누어 표시 */}
+                {(() => {
+                  const segments = [];
+                  let startIdx = 0;
+                  
+                  bouncePoints.forEach((bounce, bounceIdx) => {
+                    // 충돌 지점 이전까지의 세그먼트
+                    const segmentEnd = trajectoryPoints.findIndex((p, idx) => 
+                      idx > startIdx && 
+                      Math.abs(p.x - bounce.x) < 5 && 
+                      Math.abs(p.y - bounce.y) < 5
+                    );
+                    
+                    if (segmentEnd > startIdx) {
+                      segments.push({
+                        points: trajectoryPoints.slice(startIdx, segmentEnd + 1),
+                        isBounce: false
+                      });
+                      startIdx = segmentEnd;
+                    }
+                  });
+                  
+                  // 마지막 세그먼트
+                  if (startIdx < trajectoryPoints.length - 1) {
+                    segments.push({
+                      points: trajectoryPoints.slice(startIdx),
+                      isBounce: false
+                    });
+                  }
+                  
+                  // 세그먼트가 없으면 전체를 하나의 세그먼트로
+                  if (segments.length === 0) {
+                    segments.push({
+                      points: trajectoryPoints,
+                      isBounce: false
+                    });
+                  }
+                  
+                  return segments.map((segment, segIdx) => (
+                    <polyline
+                      key={segIdx}
+                      points={segment.points.map(p => `${p.x},${p.y}`).join(' ')}
+                      fill="none"
+                      stroke="rgba(255, 200, 50, 0.8)"
+                      strokeWidth={2.5}
+                      strokeDasharray="4,4"
+                      strokeLinecap="round"
+                    />
+                  ));
+                })()}
+                
+                {/* 벽 충돌 지점 표시 (각도에 맞는 굴곡 표시) */}
+                {bouncePoints.map((bounce, idx) => {
+                  // 반사 후 각도 계산
+                  const reflectAngle = bounce.angle;
+                  
+                  return (
+                    <g key={idx}>
+                      {/* 충돌 지점 강조 원 */}
+                      <circle
+                        cx={bounce.x}
+                        cy={bounce.y}
+                        r={10}
+                        fill="rgba(255, 100, 100, 0.4)"
+                        stroke="rgba(255, 200, 50, 1)"
+                        strokeWidth={3}
+                      >
+                        <animate attributeName="r" values="8;12;8" dur="1s" repeatCount="indefinite" />
+                      </circle>
+                      
+                      {/* 반사 각도 표시 (화살표) - 튕긴 후 방향 */}
+                      <line
+                        x1={bounce.x}
+                        y1={bounce.y}
+                        x2={bounce.x + Math.cos(reflectAngle) * 25}
+                        y2={bounce.y + Math.sin(reflectAngle) * 25}
+                        stroke="rgba(255, 200, 50, 1)"
+                        strokeWidth={3}
+                        strokeLinecap="round"
+                        markerEnd="url(#arrowhead)"
+                      />
+                      
+                      {/* 벽 표시 (각도에 맞게) */}
+                      {bounce.type === 'left' && (
+                        <line
+                          x1={bounce.x}
+                          y1={bounce.y - 20}
+                          x2={bounce.x}
+                          y2={bounce.y + 20}
+                          stroke="rgba(255, 255, 255, 0.7)"
+                          strokeWidth={3}
+                          strokeDasharray="3,3"
+                        />
+                      )}
+                      {bounce.type === 'right' && (
+                        <line
+                          x1={bounce.x}
+                          y1={bounce.y - 20}
+                          x2={bounce.x}
+                          y2={bounce.y + 20}
+                          stroke="rgba(255, 255, 255, 0.7)"
+                          strokeWidth={3}
+                          strokeDasharray="3,3"
+                        />
+                      )}
+                      {bounce.type === 'top' && (
+                        <line
+                          x1={bounce.x - 20}
+                          y1={bounce.y}
+                          x2={bounce.x + 20}
+                          y2={bounce.y}
+                          stroke="rgba(255, 255, 255, 0.7)"
+                          strokeWidth={3}
+                          strokeDasharray="3,3"
+                        />
+                      )}
+                      {bounce.type === 'bottom' && (
+                        <line
+                          x1={bounce.x - 20}
+                          y1={bounce.y}
+                          x2={bounce.x + 20}
+                          y2={bounce.y}
+                          stroke="rgba(255, 255, 255, 0.7)"
+                          strokeWidth={3}
+                          strokeDasharray="3,3"
+                        />
+                      )}
+                    </g>
+                  );
+                })}
+                
                 {/* 궤적 점들 */}
                 {trajectoryPoints.map((point, i) => {
                   if (i % 8 !== 0) return null; // 일정 간격으로만 표시
@@ -939,6 +1136,21 @@ export default function MovingMergeGame() {
 
             </radialGradient>
 
+            {/* 화살표 마커 */}
+            <marker
+              id="arrowhead"
+              markerWidth="10"
+              markerHeight="10"
+              refX="9"
+              refY="3"
+              orient="auto"
+            >
+              <polygon
+                points="0 0, 10 3, 0 6"
+                fill="rgba(255, 200, 50, 0.9)"
+              />
+            </marker>
+
           </defs>
 
           <rect width={GAME_WIDTH} height={GAME_HEIGHT} fill="url(#skyGrad)" />
@@ -1096,17 +1308,35 @@ export default function MovingMergeGame() {
 
             <g>
 
-              <circle cx={mergeEffect.x} cy={mergeEffect.y} r={40} fill="none" stroke="#FFD700" strokeWidth={3} opacity={0.8}>
+              <circle 
+                cx={mergeEffect.x} 
+                cy={mergeEffect.y} 
+                r={mergeEffect.isDragon ? 60 : 40} 
+                fill="none" 
+                stroke={mergeEffect.isDragon ? "#9B59B6" : "#FFD700"} 
+                strokeWidth={mergeEffect.isDragon ? 4 : 3} 
+                opacity={0.8}
+              >
 
-                <animate attributeName="r" from="20" to="50" dur="0.5s" />
+                <animate attributeName="r" from={mergeEffect.isDragon ? "30" : "20"} to={mergeEffect.isDragon ? "70" : "50"} dur="0.5s" />
 
                 <animate attributeName="opacity" from="1" to="0" dur="0.5s" />
 
               </circle>
 
-              <text x={mergeEffect.x} y={mergeEffect.y} fontSize={24} textAnchor="middle" fill="#FFD700" fontWeight="bold">
+              <text 
+                x={mergeEffect.x} 
+                y={mergeEffect.y} 
+                fontSize={mergeEffect.isDragon ? 32 : 24} 
+                textAnchor="middle" 
+                fill={mergeEffect.isDragon ? "#9B59B6" : "#FFD700"} 
+                fontWeight="bold"
+              >
 
-                +{(mergeEffect.level + 1) * 100}
+                {mergeEffect.isDragon 
+                  ? (mergeEffect.isDestroying ? "+1000 🐉 소멸!" : "+2000 🐉 탄생!") 
+                  : `+${(mergeEffect.level + 1) * 100}`
+                }
 
               </text>
 
