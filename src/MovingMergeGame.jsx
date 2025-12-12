@@ -454,8 +454,8 @@ export default function MovingMergeGame() {
 
         const radius = size / 2 + 3;
 
-        // 이동 속도 조절 (시각적으로 보이도록 약간 느리게)
-        const speedMultiplier = 0.75; // 속도를 75%로 줄여서 시각적으로 보이게
+        // 이동 속도 조절 (시각적으로 보이도록 더 느리게)
+        const speedMultiplier = 0.5; // 속도를 50%로 줄여서 시각적으로 명확히 보이게
         x += vx * speedMultiplier;
         y += vy * speedMultiplier;
         vy += 0.15 * speedMultiplier; // 중력도 비례해서 줄임
@@ -980,18 +980,25 @@ export default function MovingMergeGame() {
                 {LEVELS[bullet.level].emoji}
               </text>
 
-              {/* 발사체 궤적 표시 (뒤에 흔적) */}
+              {/* 발사체 궤적 표시 (뒤에 흔적 - 속도에 맞춰 조정) */}
               <circle 
-                cx={bullet.x - bullet.vx * 0.3} 
-                cy={bullet.y - bullet.vy * 0.3} 
+                cx={bullet.x - bullet.vx * 0.5 * 0.5} 
+                cy={bullet.y - bullet.vy * 0.5 * 0.5} 
                 r={bullet.size / 2 + 2} 
+                fill={LEVELS[bullet.level].color} 
+                opacity={0.4}
+              />
+              <circle 
+                cx={bullet.x - bullet.vx * 1.0 * 0.5} 
+                cy={bullet.y - bullet.vy * 1.0 * 0.5} 
+                r={bullet.size / 2} 
                 fill={LEVELS[bullet.level].color} 
                 opacity={0.3}
               />
               <circle 
-                cx={bullet.x - bullet.vx * 0.6} 
-                cy={bullet.y - bullet.vy * 0.6} 
-                r={bullet.size / 2} 
+                cx={bullet.x - bullet.vx * 1.5 * 0.5} 
+                cy={bullet.y - bullet.vy * 1.5 * 0.5} 
+                r={bullet.size / 2 - 2} 
                 fill={LEVELS[bullet.level].color} 
                 opacity={0.2}
               />
