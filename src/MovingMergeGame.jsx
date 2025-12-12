@@ -618,18 +618,6 @@ export default function MovingMergeGame() {
           return null;
         }
 
-        // 속도가 너무 느려지면 새로 추가하고 발사체 제거
-        const speed = Math.sqrt(vx * vx + vy * vy);
-        if (speed < 0.3) {
-          setBirds((prevBirds) => {
-            const newBird = createBird(level, x, y);
-            newBird.vx = (Math.random() - 0.5) * 2;
-            newBird.vy = (Math.random() - 0.5) * 2;
-            return [...prevBirds, newBird];
-          });
-          return null;
-        }
-
         return { ...prev, x, y, vx, vy };
 
       });
