@@ -6,11 +6,13 @@ const GAME_WIDTH = 350;
 
 const GAME_HEIGHT = 550;
 
-const SLING_Y = GAME_HEIGHT - 50; // 조준 공간 확대 (80 -> 50)
+const AIM_AREA_HEIGHT = 150; // 조준 영역 높이 (더 넓게)
+
+const SLING_Y = GAME_HEIGHT - 30; // 슬링샷 Y 위치 (더 아래로)
 
 const SLING_X = GAME_WIDTH / 2;
 
-const PLAY_AREA_HEIGHT = GAME_HEIGHT - 120; // 플레이 케이지 공간 (조준 영역 120px)
+const PLAY_AREA_HEIGHT = GAME_HEIGHT - AIM_AREA_HEIGHT; // 플레이 케이지 공간 (조준 영역과 분리)
 
 
 
@@ -150,8 +152,8 @@ export default function MovingMergeGame() {
 
     const pos = getEventPos(e);
 
-    // 조준 영역 확대 (더 넓은 영역에서 드래그 가능)
-    if (pos.y > SLING_Y - 50) {
+    // 조준 영역 전체에서 드래그 가능 (PLAY_AREA_HEIGHT 아래 영역)
+    if (pos.y > PLAY_AREA_HEIGHT) {
 
       setIsDragging(true);
 
@@ -170,6 +172,11 @@ export default function MovingMergeGame() {
     e.preventDefault();
 
     const pos = getEventPos(e);
+
+    // 조준 영역 내로 제한
+    if (pos.y < PLAY_AREA_HEIGHT) {
+      pos.y = PLAY_AREA_HEIGHT;
+    }
 
     const dx = SLING_X - pos.x;
 
@@ -207,8 +214,8 @@ export default function MovingMergeGame() {
 
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    // 발사 최소 거리 조정 (10으로 낮춤)
-    if (dist > 10) {
+    // 발사 최소 거리 조정 (5로 낮춰서 더 쉽게 발사 가능)
+    if (dist > 5) {
 
       // 기본 파워 (깊이에 따라) - 깊이에 비례
       const basePower = Math.min(dist / 8, 12);
@@ -693,7 +700,7 @@ export default function MovingMergeGame() {
 
     let trajectoryPoints = [];
 
-    if (isDragging && dist > 15) {
+    if (isDragging && dist > 5) {
       trajectoryPoints = calculateTrajectory(SLING_X, SLING_Y - 30, dx, dy, dist, 80);
     }
 
