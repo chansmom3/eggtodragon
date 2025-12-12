@@ -480,7 +480,7 @@ export default function MovingMergeGame() {
         const radius = size / 2 + 3;
 
         // 이동 속도 조절 (시각적으로 보이도록 더 느리게)
-        const speedMultiplier = 0.15; // 속도를 15%로 줄여서 발사 경로가 매우 명확히 보이게
+        const speedMultiplier = 0.3; // 속도를 30%로 설정 (2배 증가)
         x += vx * speedMultiplier;
         y += vy * speedMultiplier;
         vy += 0.15 * speedMultiplier; // 중력도 비례해서 줄임
@@ -701,7 +701,7 @@ export default function MovingMergeGame() {
     let currentVx = (dx / dist) * horizontalPower;
     let currentVy = (dy / dist) * verticalPower;
     const gravity = 0.15;
-    const speedMultiplier = 0.15; // 실제 발사체 속도와 동일하게
+    const speedMultiplier = 0.3; // 실제 발사체 속도와 동일하게 (2배 증가)
 
     // 경계 정의
     const minX = radius;
