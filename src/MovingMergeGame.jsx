@@ -6,9 +6,11 @@ const GAME_WIDTH = 350;
 
 const GAME_HEIGHT = 550;
 
-const SLING_Y = GAME_HEIGHT - 80;
+const SLING_Y = GAME_HEIGHT - 50; // 조준 공간 확대 (80 -> 50)
 
 const SLING_X = GAME_WIDTH / 2;
+
+const PLAY_AREA_HEIGHT = GAME_HEIGHT - 120; // 플레이 케이지 공간 (조준 영역 120px)
 
 
 
@@ -148,7 +150,8 @@ export default function MovingMergeGame() {
 
     const pos = getEventPos(e);
 
-    if (pos.y > SLING_Y - 60) {
+    // 조준 영역 확대 (SLING_Y - 60 -> SLING_Y - 30)
+    if (pos.y > SLING_Y - 30) {
 
       setIsDragging(true);
 
@@ -281,7 +284,7 @@ export default function MovingMergeGame() {
           const minX = radius;
           const maxX = GAME_WIDTH - radius;
           const minY = radius;
-          const maxY = GAME_HEIGHT - 150 - radius; // 슬링샷 영역 제외
+          const maxY = PLAY_AREA_HEIGHT - radius; // 플레이 케이지 공간 제한
 
           // 경계에 닿으면 반대 방향으로 튕김
           if (x < minX) {
@@ -318,40 +321,68 @@ export default function MovingMergeGame() {
 
         });
 
-        // 충돌 처리 (탄성 충돌)
+        // 충돌 처리 및 병합
         const collisionBirds = movedBirds.map(bird => ({ ...bird })); // 깊은 복사
+        const toRemove = new Set(); // 병합으로 제거될 새들의 인덱스
+        const mergedBirds = []; // 병합으로 생성된 새들
 
         for (let i = 0; i < collisionBirds.length; i++) {
+          if (toRemove.has(i)) continue;
 
           const bird = collisionBirds[i];
-
           const radius1 = bird.size / 2 + 5;
 
           for (let j = i + 1; j < collisionBirds.length; j++) {
+            if (toRemove.has(j)) continue;
 
             const otherBird = collisionBirds[j];
-
             const radius2 = otherBird.size / 2 + 5;
 
             const dx = otherBird.x - bird.x;
-
             const dy = otherBird.y - bird.y;
-
             const dist = Math.sqrt(dx * dx + dy * dy);
-
             const minDist = radius1 + radius2;
 
-            // 충돌 감지
-            if (dist < minDist && dist > 0) {
+            // 같은 레벨이면 병합
+            if (dist < minDist && bird.level === otherBird.level && bird.level < LEVELS.length - 1) {
+              const newLevel = Math.min(bird.level + 1, LEVELS.length - 1);
+              const mergeX = (bird.x + otherBird.x) / 2;
+              const mergeY = (bird.y + otherBird.y) / 2;
+              
+              // 병합된 새 생성
+              const mergedBird = createBird(newLevel, mergeX, mergeY);
+              mergedBird.vx = (bird.vx + otherBird.vx) / 2;
+              mergedBird.vy = (bird.vy + otherBird.vy) / 2;
+              mergedBirds.push(mergedBird);
 
+              // 병합 이펙트
+              setMergeEffect({ x: mergeX, y: mergeY, level: newLevel });
+              setTimeout(() => setMergeEffect(null), 500);
+
+              // 점수 추가
+              const points = (newLevel + 1) * 100;
+              setScore((s) => s + points);
+              setCombo((c) => c + 1);
+              setShowCombo(true);
+              setTimeout(() => setShowCombo(false), 800);
+
+              // 햅틱 피드백
+              if (navigator.vibrate) {
+                navigator.vibrate([50, 30, 50]); // 짧은 진동 패턴
+              }
+
+              toRemove.add(i);
+              toRemove.add(j);
+              break; // 한 번에 하나씩만 병합
+            }
+            // 다른 레벨이면 탄성 충돌
+            else if (dist < minDist && dist > 0) {
               // 충돌 방향 벡터 정규화
               const nx = dx / dist;
-
               const ny = dy / dist;
 
               // 상대 속도
               const dvx = otherBird.vx - bird.vx;
-
               const dvy = otherBird.vy - bird.vy;
 
               // 상대 속도와 충돌 방향의 내적
@@ -361,49 +392,35 @@ export default function MovingMergeGame() {
               const restitution = 0.8;
 
               if (dotProduct > 0) {
-
                 // 충돌 반응 (질량 비율 고려 - 크기에 따라)
                 const mass1 = radius1 * radius1;
-
                 const mass2 = radius2 * radius2;
-
                 const totalMass = mass1 + mass2;
-
                 const impulse = (2 * dotProduct * restitution) / totalMass;
 
                 // 속도 업데이트
                 bird.vx += impulse * mass2 * nx;
-
                 bird.vy += impulse * mass2 * ny;
-
                 otherBird.vx -= impulse * mass1 * nx;
-
                 otherBird.vy -= impulse * mass1 * ny;
 
-                // 위치 분리 (겹침 방지)
+                // 위치 분리 (겹침 방지 - 더 강하게)
                 const overlap = minDist - dist;
-
-                const separationX = (nx * overlap) / 2;
-
-                const separationY = (ny * overlap) / 2;
+                const separationX = (nx * overlap) * 0.6; // 더 강한 분리
+                const separationY = (ny * overlap) * 0.6;
 
                 bird.x -= separationX;
-
                 bird.y -= separationY;
-
                 otherBird.x += separationX;
-
                 otherBird.y += separationY;
-
               }
-
             }
-
           }
-
         }
 
-        return collisionBirds;
+        // 병합된 새들과 남은 새들 합치기
+        const remainingBirds = collisionBirds.filter((_, idx) => !toRemove.has(idx));
+        return [...remainingBirds, ...mergedBirds];
 
       });
 
@@ -424,43 +441,24 @@ export default function MovingMergeGame() {
 
         vy += 0.15; // 중력
 
-        // 경계 체크 (발사체의 크기를 고려)
+        // 경계 체크 (발사체의 크기를 고려, 플레이 영역 내로 제한)
         const minX = radius;
         const maxX = GAME_WIDTH - radius;
         const minY = radius;
-        const maxY = GAME_HEIGHT - radius;
+        const maxY = PLAY_AREA_HEIGHT - radius; // 플레이 영역 내로 제한
 
-        let hitBoundary = false;
-
-        // 경계에 닿으면 튕기고 새로 추가
-        if (x < minX) {
-          x = minX;
-          vx = -vx * 0.7; // 반발 계수
-          hitBoundary = true;
-        } else if (x > maxX) {
-          x = maxX;
-          vx = -vx * 0.7;
-          hitBoundary = true;
-        }
-
-        if (y < minY) {
-          y = minY;
-          vy = -vy * 0.7;
-          hitBoundary = true;
-        } else if (y > maxY) {
-          y = maxY;
-          vy = -vy * 0.7;
-          hitBoundary = true;
-        }
-
-        // 경계에 닿으면 새로 추가
-        if (hitBoundary) {
+        // 플레이 영역 밖으로 나가면 새로 추가
+        if (x < minX || x > maxX || y < minY || y > maxY) {
+          // 플레이 영역 내로 위치 제한
+          x = Math.max(minX, Math.min(maxX, x));
+          y = Math.max(minY, Math.min(maxY, y));
+          
           setBirds((prevBirds) => {
             // 발사체를 새로 추가
             const newBird = createBird(level, x, y);
             // 경계에 닿았으므로 약간의 랜덤 속도 추가
-            newBird.vx = vx * 0.5 + (Math.random() - 0.5) * 1;
-            newBird.vy = vy * 0.5 + (Math.random() - 0.5) * 1;
+            newBird.vx = (Math.random() - 0.5) * 2;
+            newBird.vy = (Math.random() - 0.5) * 2;
             return [...prevBirds, newBird];
           });
           // 발사체 제거
@@ -561,6 +559,11 @@ export default function MovingMergeGame() {
 
         if (newLevel > highestLevel) setHighestLevel(newLevel);
 
+        // 햅틱 피드백
+        if (navigator.vibrate) {
+          navigator.vibrate([100, 50, 100]); // 발사체 맞췄을 때 더 강한 진동
+        }
+
         
 
         if (newLevel < LEVELS.length - 1) {
@@ -605,15 +608,29 @@ export default function MovingMergeGame() {
 
 
 
+  // 공간 가득 참 체크
   useEffect(() => {
 
-    if (birds.length >= 30 && gameState === 'playing') {
+    if (gameState !== 'playing') return;
 
+    // 플레이 영역의 총 면적 계산
+    const playArea = PLAY_AREA_HEIGHT * GAME_WIDTH;
+    
+    // 모든 새들이 차지하는 면적 계산
+    let totalArea = 0;
+    birds.forEach(bird => {
+      const radius = bird.size / 2 + 5;
+      totalArea += Math.PI * radius * radius;
+    });
+
+    // 공간 사용률 계산 (80% 이상이면 게임 오버)
+    const usageRatio = totalArea / playArea;
+    
+    if (usageRatio > 0.8 || birds.length >= 30) {
       setGameState('gameover');
-
     }
 
-  }, [birds.length, gameState]);
+  }, [birds.length, birds, gameState]);
 
 
 
@@ -873,7 +890,7 @@ export default function MovingMergeGame() {
 
 
 
-          <line x1={0} y1={GAME_HEIGHT - 140} x2={GAME_WIDTH} y2={GAME_HEIGHT - 140} stroke="rgba(255,0,0,0.3)" strokeWidth={2} strokeDasharray="10,5" />
+          <line x1={0} y1={PLAY_AREA_HEIGHT} x2={GAME_WIDTH} y2={PLAY_AREA_HEIGHT} stroke="rgba(255,0,0,0.5)" strokeWidth={3} strokeDasharray="10,5" />
 
 
 
@@ -1011,6 +1028,31 @@ export default function MovingMergeGame() {
           <span className="text-xs text-white">🐤 {birds.length}/30</span>
 
         </div>
+
+        {/* 공간 사용률 표시 */}
+        {(() => {
+          const playArea = PLAY_AREA_HEIGHT * GAME_WIDTH;
+          let totalArea = 0;
+          birds.forEach(bird => {
+            const radius = bird.size / 2 + 5;
+            totalArea += Math.PI * radius * radius;
+          });
+          const usageRatio = totalArea / playArea;
+          const usagePercent = Math.min(Math.round(usageRatio * 100), 100);
+          return (
+            <div className="absolute top-2 right-2 bg-black/60 px-2 py-1 rounded-lg">
+              <div className="text-xs text-white mb-1">공간: {usagePercent}%</div>
+              <div className="w-20 h-2 bg-gray-700 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-300 ${
+                    usagePercent > 70 ? 'bg-red-500' : usagePercent > 50 ? 'bg-yellow-500' : 'bg-green-500'
+                  }`}
+                  style={{ width: `${usagePercent}%` }}
+                />
+              </div>
+            </div>
+          );
+        })()}
 
 
 
