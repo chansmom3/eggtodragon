@@ -413,18 +413,70 @@ export default function MovingMergeGame() {
 
         if (!prev) return null;
 
-        let { x, y, vx, vy } = prev;
+        let { x, y, vx, vy, level, size } = prev;
 
+        const radius = size / 2 + 3;
+
+        // 이동
         x += vx;
 
         y += vy;
 
-        vy += 0.15;
+        vy += 0.15; // 중력
 
-        if (x < 0 || x > GAME_WIDTH || y < 0 || y > GAME_HEIGHT) {
+        // 경계 체크 (발사체의 크기를 고려)
+        const minX = radius;
+        const maxX = GAME_WIDTH - radius;
+        const minY = radius;
+        const maxY = GAME_HEIGHT - radius;
 
+        let hitBoundary = false;
+
+        // 경계에 닿으면 튕기고 새로 추가
+        if (x < minX) {
+          x = minX;
+          vx = -vx * 0.7; // 반발 계수
+          hitBoundary = true;
+        } else if (x > maxX) {
+          x = maxX;
+          vx = -vx * 0.7;
+          hitBoundary = true;
+        }
+
+        if (y < minY) {
+          y = minY;
+          vy = -vy * 0.7;
+          hitBoundary = true;
+        } else if (y > maxY) {
+          y = maxY;
+          vy = -vy * 0.7;
+          hitBoundary = true;
+        }
+
+        // 경계에 닿으면 새로 추가
+        if (hitBoundary) {
+          setBirds((prevBirds) => {
+            // 발사체를 새로 추가
+            const newBird = createBird(level, x, y);
+            // 경계에 닿았으므로 약간의 랜덤 속도 추가
+            newBird.vx = vx * 0.5 + (Math.random() - 0.5) * 1;
+            newBird.vy = vy * 0.5 + (Math.random() - 0.5) * 1;
+            return [...prevBirds, newBird];
+          });
+          // 발사체 제거
           return null;
+        }
 
+        // 속도가 너무 느려지면 새로 추가하고 발사체 제거
+        const speed = Math.sqrt(vx * vx + vy * vy);
+        if (speed < 0.5) {
+          setBirds((prevBirds) => {
+            const newBird = createBird(level, x, y);
+            newBird.vx = (Math.random() - 0.5) * 2;
+            newBird.vy = (Math.random() - 0.5) * 2;
+            return [...prevBirds, newBird];
+          });
+          return null;
         }
 
         return { ...prev, x, y, vx, vy };
