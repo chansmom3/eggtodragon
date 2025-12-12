@@ -8,7 +8,7 @@ const GAME_HEIGHT = 550;
 
 const AIM_AREA_HEIGHT = 150; // 조준 영역 높이 (더 넓게)
 
-const SLING_Y = GAME_HEIGHT - 30; // 슬링샷 Y 위치 (더 아래로)
+const SLING_Y = GAME_HEIGHT - 70; // 슬링샷 Y 위치 (위로 올려서 드래그 공간 확보)
 
 const SLING_X = GAME_WIDTH / 2;
 
@@ -250,7 +250,7 @@ export default function MovingMergeGame() {
 
         x: SLING_X,
 
-        y: SLING_Y - 30,
+        y: SLING_Y - 20, // 발사체 시작 위치를 위로 올림
 
         vx: vx,
 
@@ -671,7 +671,7 @@ export default function MovingMergeGame() {
     let trajectoryPoints = [];
 
     if (isDragging && dist > 5) {
-      trajectoryPoints = calculateTrajectory(SLING_X, SLING_Y - 30, dx, dy, dist, 80);
+      trajectoryPoints = calculateTrajectory(SLING_X, SLING_Y - 20, dx, dy, dist, 80);
     }
 
     return (
@@ -682,9 +682,9 @@ export default function MovingMergeGame() {
 
         <circle cx={SLING_X + 25} cy={SLING_Y} r={6} fill="#8B4513" />
 
-        <rect x={SLING_X - 28} y={SLING_Y} width={8} height={40} fill="#8B4513" rx={3} />
+        <rect x={SLING_X - 28} y={SLING_Y} width={8} height={30} fill="#8B4513" rx={3} />
 
-        <rect x={SLING_X + 20} y={SLING_Y} width={8} height={40} fill="#8B4513" rx={3} />
+        <rect x={SLING_X + 20} y={SLING_Y} width={8} height={30} fill="#8B4513" rx={3} />
 
         {isDragging && (
 
@@ -776,7 +776,7 @@ export default function MovingMergeGame() {
 
         {!isDragging && !bullet && (
 
-          <text x={SLING_X} y={SLING_Y - 15} fontSize={LEVELS[currentLevel].size} textAnchor="middle">
+          <text x={SLING_X} y={SLING_Y - 20} fontSize={LEVELS[currentLevel].size} textAnchor="middle">
 
             {LEVELS[currentLevel].emoji}
 
