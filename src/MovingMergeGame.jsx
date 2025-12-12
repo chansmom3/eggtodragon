@@ -454,12 +454,78 @@ export default function MovingMergeGame() {
 
         const radius = size / 2 + 3;
 
-        // 이동
-        x += vx;
+        // 이동 속도 조절 (시각적으로 보이도록 약간 느리게)
+        const speedMultiplier = 0.75; // 속도를 75%로 줄여서 시각적으로 보이게
+        x += vx * speedMultiplier;
+        y += vy * speedMultiplier;
+        vy += 0.15 * speedMultiplier; // 중력도 비례해서 줄임
 
-        y += vy;
+        // 충돌 감지 (gameLoop에서 직접 체크)
+        setBirds((prevBirds) => {
+          let hit = false;
+          let hitBird = null;
 
-        vy += 0.15; // 중력
+          const checkedBirds = prevBirds.filter((bird) => {
+            const dx = bird.x - x;
+            const dy = bird.y - y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const hitDist = (bird.size + size) / 2 + 12;
+
+            if (dist < hitDist && bird.level === level) {
+              hit = true;
+              hitBird = bird;
+              return false;
+            }
+            return true;
+          });
+
+          if (hit && hitBird) {
+            // 충돌 시 약간의 딜레이를 주어 시각적으로 보이도록
+            setTimeout(() => {
+              const newLevel = Math.min(hitBird.level + 1, LEVELS.length - 1);
+              const points = (newLevel + 1) * 100;
+
+              setScore((s) => s + points);
+              setCombo((c) => c + 1);
+              setShowCombo(true);
+              setTimeout(() => setShowCombo(false), 800);
+
+              setMergeEffect({ x: hitBird.x, y: hitBird.y, level: newLevel });
+              setTimeout(() => setMergeEffect(null), 500);
+
+              if (newLevel > highestLevel) setHighestLevel(newLevel);
+
+              // 햅틱 피드백
+              try {
+                if (navigator.vibrate) {
+                  navigator.vibrate([100, 50, 100]);
+                }
+              } catch (e) {}
+
+              setBirds((currentBirds) => {
+                const updatedBirds = currentBirds.filter(b => b.id !== hitBird.id);
+                
+                if (newLevel < LEVELS.length - 1) {
+                  updatedBirds.push(createBird(newLevel, hitBird.x, hitBird.y));
+                } else {
+                  setScore((s) => s + 1000);
+                }
+
+                if (updatedBirds.length < 12) {
+                  updatedBirds.push(createBird(getRandomLevel(Math.min(3, newLevel + 1))));
+                }
+
+                return updatedBirds;
+              });
+
+              setBullet(null);
+            }, 200); // 200ms 딜레이로 충돌 과정이 명확히 보이도록
+
+            return checkedBirds;
+          }
+
+          return checkedBirds;
+        });
 
         // 경계 체크 (발사체의 크기를 고려, 플레이 영역 내로 제한)
         const minX = radius;
@@ -487,7 +553,7 @@ export default function MovingMergeGame() {
 
         // 속도가 너무 느려지면 새로 추가하고 발사체 제거
         const speed = Math.sqrt(vx * vx + vy * vy);
-        if (speed < 0.5) {
+        if (speed < 0.3) {
           setBirds((prevBirds) => {
             const newBird = createBird(level, x, y);
             newBird.vx = (Math.random() - 0.5) * 2;
@@ -521,102 +587,6 @@ export default function MovingMergeGame() {
 
 
 
-  useEffect(() => {
-
-    if (!bullet || gameState !== 'playing') return;
-
-
-
-    setBirds((prev) => {
-
-      let hit = false;
-
-      let hitBird = null;
-
-      let newBirds = prev.filter((bird) => {
-
-        const dx = bird.x - bullet.x;
-
-        const dy = bird.y - bullet.y;
-
-        const dist = Math.sqrt(dx * dx + dy * dy);
-
-        const hitDist = (bird.size + bullet.size) / 2 + 10;
-
-        if (dist < hitDist && bird.level === bullet.level) {
-
-          hit = true;
-
-          hitBird = bird;
-
-          return false;
-
-        }
-
-        return true;
-
-      });
-
-
-
-      if (hit && hitBird) {
-
-        const newLevel = Math.min(hitBird.level + 1, LEVELS.length - 1);
-
-        const points = (newLevel + 1) * 100;
-
-        setScore((s) => s + points);
-
-        setCombo((c) => c + 1);
-
-        setShowCombo(true);
-
-        setTimeout(() => setShowCombo(false), 800);
-
-        setMergeEffect({ x: hitBird.x, y: hitBird.y, level: newLevel });
-
-        setTimeout(() => setMergeEffect(null), 500);
-
-        if (newLevel > highestLevel) setHighestLevel(newLevel);
-
-        // 햅틱 피드백
-        try {
-          if (navigator.vibrate) {
-            navigator.vibrate([100, 50, 100]); // 발사체 맞췄을 때 더 강한 진동
-          }
-        } catch (e) {
-          // 햅틱 지원하지 않는 환경에서는 무시
-        }
-
-        
-
-        if (newLevel < LEVELS.length - 1) {
-
-          newBirds.push(createBird(newLevel, hitBird.x, hitBird.y));
-
-        } else {
-
-          setScore((s) => s + 1000);
-
-        }
-
-        setBullet(null);
-
-        
-
-        if (newBirds.length < 12) {
-
-          newBirds.push(createBird(getRandomLevel(Math.min(3, newLevel + 1))));
-
-        }
-
-      }
-
-      return newBirds;
-
-    });
-
-  }, [bullet?.x, bullet?.y, gameState, highestLevel]);
 
 
 
@@ -977,13 +947,54 @@ export default function MovingMergeGame() {
 
             <g>
 
-              <circle cx={bullet.x} cy={bullet.y} r={bullet.size / 2 + 3} fill={LEVELS[bullet.level].color} opacity={0.5} />
-
-              <text x={bullet.x} y={bullet.y + bullet.size / 4} fontSize={bullet.size} textAnchor="middle">
-
+              {/* 발사체 하이라이트 (더 명확하게 보이도록) */}
+              <circle 
+                cx={bullet.x} 
+                cy={bullet.y} 
+                r={bullet.size / 2 + 8} 
+                fill={LEVELS[bullet.level].color} 
+                opacity={0.3}
+              >
+                <animate attributeName="r" values={`${bullet.size / 2 + 5};${bullet.size / 2 + 12};${bullet.size / 2 + 5}`} dur="0.5s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.2;0.4;0.2" dur="0.5s" repeatCount="indefinite" />
+              </circle>
+              
+              {/* 발사체 본체 */}
+              <circle 
+                cx={bullet.x} 
+                cy={bullet.y} 
+                r={bullet.size / 2 + 5} 
+                fill={LEVELS[bullet.level].color} 
+                opacity={0.8}
+                stroke="#FFFFFF"
+                strokeWidth={2}
+              />
+              
+              <text 
+                x={bullet.x} 
+                y={bullet.y + bullet.size / 4} 
+                fontSize={bullet.size} 
+                textAnchor="middle"
+                style={{ filter: 'drop-shadow(0 0 3px rgba(255,255,255,0.8))' }}
+              >
                 {LEVELS[bullet.level].emoji}
-
               </text>
+
+              {/* 발사체 궤적 표시 (뒤에 흔적) */}
+              <circle 
+                cx={bullet.x - bullet.vx * 0.3} 
+                cy={bullet.y - bullet.vy * 0.3} 
+                r={bullet.size / 2 + 2} 
+                fill={LEVELS[bullet.level].color} 
+                opacity={0.3}
+              />
+              <circle 
+                cx={bullet.x - bullet.vx * 0.6} 
+                cy={bullet.y - bullet.vy * 0.6} 
+                r={bullet.size / 2} 
+                fill={LEVELS[bullet.level].color} 
+                opacity={0.2}
+              />
 
             </g>
 
