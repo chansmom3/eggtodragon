@@ -150,8 +150,8 @@ export default function MovingMergeGame() {
 
     const pos = getEventPos(e);
 
-    // 조준 영역 확대 (SLING_Y - 60 -> SLING_Y - 30)
-    if (pos.y > SLING_Y - 30) {
+    // 조준 영역 확대 (더 넓은 영역에서 드래그 가능)
+    if (pos.y > SLING_Y - 50) {
 
       setIsDragging(true);
 
@@ -207,14 +207,14 @@ export default function MovingMergeGame() {
 
     const dist = Math.sqrt(dx * dx + dy * dy);
 
-    if (dist > 15) {
+    // 발사 최소 거리 조정 (10으로 낮춤)
+    if (dist > 10) {
 
-      // 기본 파워 (깊이에 따라)
+      // 기본 파워 (깊이에 따라) - 깊이에 비례
       const basePower = Math.min(dist / 8, 12);
 
       // 각도 계산 (0도 = 오른쪽, 90도 = 위쪽)
       const angle = Math.atan2(-dy, -dx); // -dy인 이유는 화면 좌표계 때문
-      const angleDeg = (angle * 180) / Math.PI;
 
       // 각도에 따른 속도 조절
       // 위로 많이 당기면(수직) 수직 속도 증가, 옆으로 많이 당기면(수평) 수평 속도 증가
@@ -229,6 +229,15 @@ export default function MovingMergeGame() {
       // 최종 속도 계산
       const vx = (dx / dist) * horizontalPower;
       const vy = (dy / dist) * verticalPower;
+
+      // 발사 시 햅틱 피드백
+      try {
+        if (navigator.vibrate) {
+          navigator.vibrate(30); // 짧은 발사 진동
+        }
+      } catch (e) {
+        // 햅틱 지원하지 않는 환경에서는 무시
+      }
 
       setBullet({
 
@@ -367,8 +376,12 @@ export default function MovingMergeGame() {
               setTimeout(() => setShowCombo(false), 800);
 
               // 햅틱 피드백
-              if (navigator.vibrate) {
-                navigator.vibrate([50, 30, 50]); // 짧은 진동 패턴
+              try {
+                if (navigator.vibrate) {
+                  navigator.vibrate([50, 30, 50]); // 짧은 진동 패턴
+                }
+              } catch (e) {
+                // 햅틱 지원하지 않는 환경에서는 무시
               }
 
               toRemove.add(i);
@@ -560,8 +573,12 @@ export default function MovingMergeGame() {
         if (newLevel > highestLevel) setHighestLevel(newLevel);
 
         // 햅틱 피드백
-        if (navigator.vibrate) {
-          navigator.vibrate([100, 50, 100]); // 발사체 맞췄을 때 더 강한 진동
+        try {
+          if (navigator.vibrate) {
+            navigator.vibrate([100, 50, 100]); // 발사체 맞췄을 때 더 강한 진동
+          }
+        } catch (e) {
+          // 햅틱 지원하지 않는 환경에서는 무시
         }
 
         
