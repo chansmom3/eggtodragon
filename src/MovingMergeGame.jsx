@@ -142,7 +142,7 @@ export default function MovingMergeGame() {
 
   const handleStart = (e) => {
 
-    if (gameState !== 'playing' || bullet) return;
+    if (gameState !== 'playing') return;
 
     e.preventDefault();
 
@@ -206,7 +206,26 @@ export default function MovingMergeGame() {
 
     if (dist > 15) {
 
-      const power = Math.min(dist / 8, 12);
+      // 기본 파워 (깊이에 따라)
+      const basePower = Math.min(dist / 8, 12);
+
+      // 각도 계산 (0도 = 오른쪽, 90도 = 위쪽)
+      const angle = Math.atan2(-dy, -dx); // -dy인 이유는 화면 좌표계 때문
+      const angleDeg = (angle * 180) / Math.PI;
+
+      // 각도에 따른 속도 조절
+      // 위로 많이 당기면(수직) 수직 속도 증가, 옆으로 많이 당기면(수평) 수평 속도 증가
+      const horizontalRatio = Math.abs(Math.cos(angle));
+      const verticalRatio = Math.abs(Math.sin(angle));
+
+      // 깊이와 각도를 모두 고려한 속도
+      // 깊이가 깊을수록, 해당 방향으로 많이 당길수록 속도 증가
+      const horizontalPower = basePower * (1 + horizontalRatio * 0.3);
+      const verticalPower = basePower * (1 + verticalRatio * 0.3);
+
+      // 최종 속도 계산
+      const vx = (dx / dist) * horizontalPower;
+      const vy = (dy / dist) * verticalPower;
 
       setBullet({
 
@@ -214,9 +233,9 @@ export default function MovingMergeGame() {
 
         y: SLING_Y - 30,
 
-        vx: (dx / dist) * power,
+        vx: vx,
 
-        vy: (dy / dist) * power,
+        vy: vy,
 
         level: currentLevel,
 
@@ -246,24 +265,47 @@ export default function MovingMergeGame() {
 
       setBirds((prev) => {
 
-        return prev.map((bird) => {
+        // 먼저 이동 처리
+        const movedBirds = prev.map((bird) => {
 
           let { x, y, vx, vy, level } = bird;
 
           const speed = LEVELS[level].speed;
+          const radius = bird.size / 2 + 5; // 새의 반지름 (하이라이트 포함)
 
+          // 이동
           x += vx * speed;
-
           y += vy * speed;
 
-          if (x < 20 || x > GAME_WIDTH - 20) vx = -vx;
+          // 경계 체크 (새의 크기를 고려)
+          const minX = radius;
+          const maxX = GAME_WIDTH - radius;
+          const minY = radius;
+          const maxY = GAME_HEIGHT - 150 - radius; // 슬링샷 영역 제외
 
-          if (y < 20 || y > GAME_HEIGHT - 150) vy = -vy;
+          // 경계에 닿으면 반대 방향으로 튕김
+          if (x < minX) {
+            x = minX;
+            vx = -vx;
+          } else if (x > maxX) {
+            x = maxX;
+            vx = -vx;
+          }
 
-          x = Math.max(20, Math.min(GAME_WIDTH - 20, x));
+          if (y < minY) {
+            y = minY;
+            vy = -vy;
+          } else if (y > maxY) {
+            y = maxY;
+            vy = -vy;
+          }
 
-          y = Math.max(20, Math.min(GAME_HEIGHT - 150, y));
+          // 속도 제한 (너무 빠르게 움직이지 않도록)
+          const maxSpeed = 3;
+          if (Math.abs(vx) > maxSpeed) vx = vx > 0 ? maxSpeed : -maxSpeed;
+          if (Math.abs(vy) > maxSpeed) vy = vy > 0 ? maxSpeed : -maxSpeed;
 
+          // 랜덤 방향 변화
           if (Math.random() < 0.01) {
 
             vx += (Math.random() - 0.5) * 0.5;
@@ -275,6 +317,93 @@ export default function MovingMergeGame() {
           return { ...bird, x, y, vx, vy };
 
         });
+
+        // 충돌 처리 (탄성 충돌)
+        const collisionBirds = movedBirds.map(bird => ({ ...bird })); // 깊은 복사
+
+        for (let i = 0; i < collisionBirds.length; i++) {
+
+          const bird = collisionBirds[i];
+
+          const radius1 = bird.size / 2 + 5;
+
+          for (let j = i + 1; j < collisionBirds.length; j++) {
+
+            const otherBird = collisionBirds[j];
+
+            const radius2 = otherBird.size / 2 + 5;
+
+            const dx = otherBird.x - bird.x;
+
+            const dy = otherBird.y - bird.y;
+
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            const minDist = radius1 + radius2;
+
+            // 충돌 감지
+            if (dist < minDist && dist > 0) {
+
+              // 충돌 방향 벡터 정규화
+              const nx = dx / dist;
+
+              const ny = dy / dist;
+
+              // 상대 속도
+              const dvx = otherBird.vx - bird.vx;
+
+              const dvy = otherBird.vy - bird.vy;
+
+              // 상대 속도와 충돌 방향의 내적
+              const dotProduct = dvx * nx + dvy * ny;
+
+              // 탄성 충돌 (반발 계수 0.8)
+              const restitution = 0.8;
+
+              if (dotProduct > 0) {
+
+                // 충돌 반응 (질량 비율 고려 - 크기에 따라)
+                const mass1 = radius1 * radius1;
+
+                const mass2 = radius2 * radius2;
+
+                const totalMass = mass1 + mass2;
+
+                const impulse = (2 * dotProduct * restitution) / totalMass;
+
+                // 속도 업데이트
+                bird.vx += impulse * mass2 * nx;
+
+                bird.vy += impulse * mass2 * ny;
+
+                otherBird.vx -= impulse * mass1 * nx;
+
+                otherBird.vy -= impulse * mass1 * ny;
+
+                // 위치 분리 (겹침 방지)
+                const overlap = minDist - dist;
+
+                const separationX = (nx * overlap) / 2;
+
+                const separationY = (ny * overlap) / 2;
+
+                bird.x -= separationX;
+
+                bird.y -= separationY;
+
+                otherBird.x += separationX;
+
+                otherBird.y += separationY;
+
+              }
+
+            }
+
+          }
+
+        }
+
+        return collisionBirds;
 
       });
 
@@ -426,7 +555,7 @@ export default function MovingMergeGame() {
 
   useEffect(() => {
 
-    if (birds.length >= 15 && gameState === 'playing') {
+    if (birds.length >= 30 && gameState === 'playing') {
 
       setGameState('gameover');
 
@@ -436,11 +565,51 @@ export default function MovingMergeGame() {
 
 
 
+  const calculateTrajectory = (startX, startY, dx, dy, dist, steps = 50) => {
+    const points = [];
+    
+    // handleEnd와 동일한 방식으로 속도 계산
+    const basePower = Math.min(dist / 8, 12);
+    const angle = Math.atan2(-dy, -dx);
+    const horizontalRatio = Math.abs(Math.cos(angle));
+    const verticalRatio = Math.abs(Math.sin(angle));
+    const horizontalPower = basePower * (1 + horizontalRatio * 0.3);
+    const verticalPower = basePower * (1 + verticalRatio * 0.3);
+    
+    let x = startX;
+    let y = startY;
+    let currentVx = (dx / dist) * horizontalPower;
+    let currentVy = (dy / dist) * verticalPower;
+    const gravity = 0.15;
+
+    for (let i = 0; i < steps; i++) {
+      points.push({ x, y });
+      x += currentVx;
+      y += currentVy;
+      currentVy += gravity;
+
+      // 화면 밖으로 나가면 중단
+      if (x < 0 || x > GAME_WIDTH || y < 0 || y > GAME_HEIGHT) {
+        break;
+      }
+    }
+
+    return points;
+  };
+
   const renderSlingshot = () => {
 
     const dx = SLING_X - dragPos.x;
 
     const dy = SLING_Y - dragPos.y;
+
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    let trajectoryPoints = [];
+
+    if (isDragging && dist > 15) {
+      trajectoryPoints = calculateTrajectory(SLING_X, SLING_Y - 30, dx, dy, dist, 80);
+    }
 
     return (
 
@@ -462,22 +631,59 @@ export default function MovingMergeGame() {
 
             <line x1={SLING_X + 25} y1={SLING_Y} x2={dragPos.x} y2={dragPos.y} stroke="#654321" strokeWidth={3} />
 
+            {/* 예상 궤적 라인 */}
+            {trajectoryPoints.length > 1 && (
+              <>
+                <polyline
+                  points={trajectoryPoints.map(p => `${p.x},${p.y}`).join(' ')}
+                  fill="none"
+                  stroke="rgba(255, 200, 50, 0.8)"
+                  strokeWidth={2.5}
+                  strokeDasharray="4,4"
+                  strokeLinecap="round"
+                />
+                {/* 궤적 점들 */}
+                {trajectoryPoints.map((point, i) => {
+                  if (i % 8 !== 0) return null; // 일정 간격으로만 표시
+                  const opacity = 1 - (i / trajectoryPoints.length) * 0.7;
+                  return (
+                    <circle
+                      key={i}
+                      cx={point.x}
+                      cy={point.y}
+                      r={3}
+                      fill="rgba(255, 200, 50, 0.9)"
+                      opacity={opacity}
+                    />
+                  );
+                })}
+                {/* 예상 충돌 지점 표시 */}
+                {trajectoryPoints.length > 10 && (
+                  <circle
+                    cx={trajectoryPoints[Math.min(30, trajectoryPoints.length - 1)].x}
+                    cy={trajectoryPoints[Math.min(30, trajectoryPoints.length - 1)].y}
+                    r={8}
+                    fill="none"
+                    stroke="rgba(255, 100, 100, 0.8)"
+                    strokeWidth={2}
+                    strokeDasharray="3,3"
+                  >
+                    <animate attributeName="r" values="6;10;6" dur="1s" repeatCount="indefinite" />
+                    <animate attributeName="opacity" values="0.6;1;0.6" dur="1s" repeatCount="indefinite" />
+                  </circle>
+                )}
+              </>
+            )}
+
+            {/* 발사 각도 힌트 */}
             <line
-
               x1={dragPos.x}
-
               y1={dragPos.y}
-
-              x2={dragPos.x + dx * 2}
-
-              y2={dragPos.y + dy * 2}
-
-              stroke="rgba(255,100,100,0.5)"
-
-              strokeWidth={2}
-
-              strokeDasharray="5,5"
-
+              x2={dragPos.x + dx * 0.3}
+              y2={dragPos.y + dy * 0.3}
+              stroke="rgba(255, 255, 255, 0.9)"
+              strokeWidth={3}
+              strokeLinecap="round"
             />
 
             <text x={dragPos.x} y={dragPos.y + 5} fontSize={LEVELS[currentLevel].size} textAnchor="middle">
@@ -485,6 +691,21 @@ export default function MovingMergeGame() {
               {LEVELS[currentLevel].emoji}
 
             </text>
+
+            {/* 힘 표시 */}
+            {dist > 15 && (
+              <text
+                x={dragPos.x}
+                y={dragPos.y - 25}
+                fontSize={12}
+                textAnchor="middle"
+                fill="white"
+                fontWeight="bold"
+                style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}
+              >
+                힘: {Math.round((Math.min(dist / 8, 12) / 12) * 100)}%
+              </text>
+            )}
 
           </>
 
@@ -604,21 +825,58 @@ export default function MovingMergeGame() {
 
 
 
-          {birds.map((bird) => (
+          {birds.map((bird) => {
+            const isTarget = isDragging && bird.level === currentLevel;
+            return (
+              <g key={bird.id}>
+                {/* 타겟 하이라이트 */}
+                {isTarget && (
+                  <>
+                    <circle
+                      cx={bird.x}
+                      cy={bird.y}
+                      r={bird.size / 2 + 15}
+                      fill="none"
+                      stroke="#FFD700"
+                      strokeWidth={3}
+                      opacity={0.8}
+                    >
+                      <animate attributeName="r" values={`${bird.size / 2 + 10};${bird.size / 2 + 20};${bird.size / 2 + 10}`} dur="1s" repeatCount="indefinite" />
+                      <animate attributeName="opacity" values="0.5;1;0.5" dur="1s" repeatCount="indefinite" />
+                    </circle>
+                    <circle
+                      cx={bird.x}
+                      cy={bird.y}
+                      r={bird.size / 2 + 8}
+                      fill="rgba(255, 215, 0, 0.2)"
+                    />
+                  </>
+                )}
+                <circle cx={bird.x} cy={bird.y} r={bird.size / 2 + 5} fill={LEVELS[bird.level].color} opacity={isTarget ? 0.5 : 0.3} />
 
-            <g key={bird.id}>
+                <text x={bird.x} y={bird.y + bird.size / 4} fontSize={bird.size} textAnchor="middle">
 
-              <circle cx={bird.x} cy={bird.y} r={bird.size / 2 + 5} fill={LEVELS[bird.level].color} opacity={0.3} />
+                  {LEVELS[bird.level].emoji}
 
-              <text x={bird.x} y={bird.y + bird.size / 4} fontSize={bird.size} textAnchor="middle">
+                </text>
 
-                {LEVELS[bird.level].emoji}
-
-              </text>
-
-            </g>
-
-          ))}
+                {/* 레벨 표시 */}
+                {isTarget && (
+                  <text
+                    x={bird.x}
+                    y={bird.y - bird.size / 2 - 8}
+                    fontSize={10}
+                    textAnchor="middle"
+                    fill="#FFD700"
+                    fontWeight="bold"
+                    style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.8)' }}
+                  >
+                    타겟!
+                  </text>
+                )}
+              </g>
+            );
+          })}
 
 
 
@@ -698,7 +956,7 @@ export default function MovingMergeGame() {
 
         <div className="absolute bottom-2 right-2 bg-red-400/80 px-2 py-1 rounded-lg">
 
-          <span className="text-xs text-white">🐤 {birds.length}/15</span>
+          <span className="text-xs text-white">🐤 {birds.length}/30</span>
 
         </div>
 
